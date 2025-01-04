@@ -1,7 +1,7 @@
 import threading
 from flask import Flask, jsonify
 from flask_cors import CORS
-from MIRFeatureExtractor import FeatureExtractor
+from lib.MIRFeatureExtractor import FeatureExtractor
 
 # Flask app
 app = Flask(__name__)
