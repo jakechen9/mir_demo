@@ -32,7 +32,7 @@ function fetchZCR() {
         .then((data) => {
             if (data.zcr !== undefined) {
                 // console.log("ZCR:", data.zcr); // Log the ZCR value
-                if (data.zcr > 0.01) {
+                if ( 0.06 < data.zcr < 0.08) {
                     bgColor = color(0); // Change background to black
                     fontColor = color(255); // Change font color to white
                 } else {

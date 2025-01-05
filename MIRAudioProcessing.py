@@ -1,19 +1,19 @@
 import threading
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_cors import CORS
-from lib.MIRFeatureExtractor import FeatureExtractor
+from lib.MIRRealTimeFeatureExtractor import RealTimeFileFeatureExtractor
+import signal
 
 # Flask app
 app = Flask(__name__)
 CORS(app)
 
-# Create an AudioProcessor instance
-feature_extractor = FeatureExtractor("test_track.wav")
+feature_extractor = RealTimeFileFeatureExtractor("test_track.wav")
 
 
-# Start the ZCR calculation in a background thread
-def start_zcr_calculation():
-    feature_extractor.calculate_zcr()
+# Start the audio stream in a separate thread
+def start_audio_stream():
+    feature_extractor.start_stream()
 
 
 @app.route("/get_zcr/<int:index>", methods=["GET"])
@@ -25,12 +25,45 @@ def get_zcr(index):
         return jsonify({"error": "Index out of range"}), 404
 
 
-if __name__ == "__main__":
-    # Start ZCR calculation in a separate thread
-    threading.Thread(target=start_zcr_calculation, daemon=True).start()
+@app.route("/shutdown", methods=["POST"])
+def shutdown():
+    """
+    Shutdown route to stop the audio stream and terminate the Flask server.
+    """
+    feature_extractor.stop_event.set()  # Signal the feature extractor to stop
+    func = request.environ.get('werkzeug.server.shutdown')
+    if func is None:
+        raise RuntimeError('Not running with the Werkzeug Server')
+    func()  # Shutdown the Flask server
+    return jsonify({"message": "Shutting down..."})
 
-    # Start audio playback in a separate thread
-    threading.Thread(target=feature_extractor.play_audio, daemon=True).start()
+
+# Signal handler for graceful shutdown
+def handle_exit(signal, frame):
+    """
+    Handle Ctrl+C or SIGTERM signals to cleanly stop the application.
+    """
+    print("Signal received, shutting down gracefully...")
+    feature_extractor.stop_event.set()  # Signal threads to stop
+    audio_thread.join()  # Wait for audio thread to complete
+    feature_extractor.stop_stream()  # Clean up PyAudio resources
+    print("Shutdown complete.")
+    exit(0)
+
+
+# Register signal handlers for SIGINT (Ctrl+C) and SIGTERM
+signal.signal(signal.SIGINT, handle_exit)
+signal.signal(signal.SIGTERM, handle_exit)
+
+if __name__ == "__main__":
+
+    # Start audio stream in a background thread
+    audio_thread = threading.Thread(target=start_audio_stream, daemon=True)
+    audio_thread.start()
 
     # Run the Flask server
-    app.run(host="127.0.0.1", port=5050)
+    try:
+        app.run(host="127.0.0.1", port=5050)
+    except Exception as e:
+        print(f"Error occurred: {e}")
+        handle_exit(None, None)
