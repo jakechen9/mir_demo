@@ -5,9 +5,11 @@ from flask_cors import CORS
 from lib.MIRRealTimeFeatureExtractor import RealTimeFileFeatureExtractor
 import signal
 import logging
+import numpy as np
 logging.getLogger('werkzeug').setLevel(logging.ERROR)  # Suppress logs
 
-zcr_values = []
+
+feature_values = []
 
 # Flask app
 app = Flask(__name__)
@@ -21,20 +23,45 @@ def start_audio_stream():
     feature_extractor.start_stream()
 
 
-@app.route("/get_zcr/<int:index>", methods=["GET"])
-def get_zcr(index):
-    zcr = feature_extractor.get_features_at_index(index)
-    if zcr is not None:
-        zcr_values.append({"index": index, "zcr": zcr})  # Append ZCR value
-        # Save all ZCR values to JSON immediately
-        with open("zcr_values.json", "w") as json_file:
-            json.dump(zcr_values, json_file)
-            print(f"Saved ZCR at index {index} to zcr_values.json")
+# @app.route("/get_zcr/<int:index>", methods=["GET"])
+# def get_features(index):
+#     features = feature_extractor.get_features_at_index(index)
+#     if features is not None:
+#         features = {k: float(v) if isinstance(v, np.float32) else v for k, v in features.items()}
+#
+#         # Append all feature values
+#         feature_values.append({"index": index, **features})
+#         # Save all feature values to JSON immediately
+#         with open("features.json", "w") as json_file:
+#             json.dump(feature_values, json_file)
+#             print(f"Saved features at index {index} to features.json")
+#
+#         print(f"Features at index {index}: {features}")  # Print features live
+#         return jsonify(features)
+#     else:
+#         return jsonify({"error": "Index out of range"}), 404
 
-        print(f"ZCR at index {index}: {zcr}")  # Print the ZCR value live
-        return jsonify({"zcr": zcr})
+
+@app.route("/get_features/<int:index>", methods=["GET"])
+def get_features(index):
+    features = feature_extractor.get_features_at_index(index)
+
+    if features is not None and len(features) > 0:  # Check if any feature is available
+        # Convert all numpy.float32 values to Python float
+        features = {k: float(v) if isinstance(v, (np.float32, np.float64)) else v for k, v in features.items()}
+
+        # Append all feature values
+        feature_values.append({"index": index, **features})
+        # Save all feature values to JSON immediately
+        with open("features.json", "w") as json_file:
+            json.dump(feature_values, json_file)
+            print(f"Saved features at index {index} to features.json")
+
+        print(f"Features at index {index}: {features}")  # Print features live
+        return jsonify(features)
     else:
-        return jsonify({"error": "Index out of range"}), 404
+        return jsonify({"error": f"Index {index} is out of range or no features available"}), 404
+
 
 
 @app.route("/shutdown", methods=["POST"])
@@ -69,7 +96,7 @@ signal.signal(signal.SIGTERM, handle_exit)
 
 if __name__ == "__main__":
     # Initialize an empty JSON file to overwrite old data
-    with open("zcr_values.json", "w") as json_file:
+    with open("features.json", "w") as json_file:
         json.dump([], json_file)  # Start with an empty JSON list
 
     # Start audio stream in a background thread
