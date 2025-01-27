@@ -11,6 +11,7 @@ let rmsValues = []; // Store fetched RMS values
 let metallicMode = false; // Flag for metallic morphing liquid
 let waterInkMode = false; // Flag for water ink texture
 let shootingStarMode = false; // Flag for shooting star effects (from ZCR)
+let metallicTimer = 0; // Timer for metallic mode (in frames)
 
 // Server URL
 const SERVER_URL = "http://127.0.0.1:5050";
@@ -54,54 +55,24 @@ function windowResized() {
 }
 
 function draw() {
-    background(bgColor);
+    // ZCR shooting star mode takes priority
+    if (shootingStarMode) {
+        bgColor = color(0); // Black background for shooting star
+        drawShootingStarEffect();
+    } else if (metallicMode) {
+        // Metallic mode, limited to 2 seconds
+        bgColor = color(0); // Black background for metallic mode
+        drawMetallicLiquidTexture();
 
-    if (metallicMode) {
-        drawMetallicLiquidTexture(); // RMS dramatic changes
-    } else if (waterInkMode) {
-        drawWaterInkTexture(); // RMS stable behavior
-    } else {
-        // ZCR-controlled visualization
-        for (let p of particles) {
-            if (shootingStarMode) {
-                // Particles move in a line during shooting star mode
-                p.x += p.dirX * p.speed * 2; // Faster movement
-                p.y += p.dirY * p.speed * 0.5; // Smaller vertical movement
-            } else {
-                // Particles move organically using Perlin noise
-                let n = noise(p.x * noiseScale, p.y * noiseScale);
-                let angle = TAU * n;
-                p.x += cos(angle) * p.dirX * p.speed;
-                p.y += sin(angle) * p.dirY * p.speed;
-            }
-
-            // Add current position to trail
-            p.trail.push({ x: p.x, y: p.y });
-            if (p.trail.length > p.maxTrailLength) {
-                p.trail.shift(); // Remove oldest trail point
-            }
-
-            // Draw trail
-            noFill();
-            stroke(shootingStarMode ? color(0, 255, 0, 150) : color(255, 100)); // Neon green for shooting star mode
-            beginShape();
-            for (let t of p.trail) {
-                vertex(t.x, t.y);
-            }
-            endShape();
-
-            // Draw particle
-            fill(shootingStarMode ? color(0, 255, 0) : fontColor); // Neon green for shooting star mode
-            noStroke();
-            ellipse(p.x, p.y, p.size);
-
-            // Reset particle if off-screen
-            if (!onScreen(p)) {
-                p.x = random(width);
-                p.y = random(height);
-                p.trail = []; // Clear the trail
-            }
+        metallicTimer++;
+        if (metallicTimer > 120) { // Limit to ~2 seconds (120 frames at 60fps)
+            metallicMode = false; // Reset metallic mode
+            metallicTimer = 0;
         }
+    } else {
+        // Default mode (water ink particles)
+        bgColor = color(255); // White background
+        drawWaterInkTexture();
     }
 
     // Display title text
@@ -131,19 +102,17 @@ function fetchFeatures() {
                     let fluctuation = Math.max(...last100) - Math.min(...last100);
 
                     if (fluctuation > 0.02) {
-                        // Dramatic RMS change
+                        // Activate metallic mode if dramatic RMS changes
                         metallicMode = true;
                         waterInkMode = false;
-                        bgColor = color(0); // Metallic texture background
                     } else {
-                        // Stable RMS
+                        // Stable RMS -> Default water ink
                         metallicMode = false;
                         waterInkMode = true;
-                        bgColor = color(100, 100, 255); // Water ink texture background
                     }
                 }
 
-                // ZCR behavior
+                // ZCR behavior (prioritized over RMS)
                 if (data.zcr >= 0.02 && data.zcr <= 0.08) {
                     shootingStarMode = true; // Activate shooting star mode
                 } else {
@@ -187,3 +156,22 @@ function drawWaterInkTexture() {
         ellipse(p.x, p.y, p.size * 2); // Larger, ink-like particles
     }
 }
+
+function drawShootingStarEffect() {
+    // Shooting star effect
+    for (let p of particles) {
+        p.x += p.dirX * p.speed * 2; // Faster movement
+        p.y += p.dirY * p.speed * 0.5; // Smaller vertical movement
+
+        fill(color(0, 255, 0)); // Neon green particles
+        noStroke();
+        ellipse(p.x, p.y, p.size);
+
+        // Reset particle if off-screen
+        if (!onScreen(p)) {
+            p.x = random(width);
+            p.y = random(height);
+        }
+    }
+}
+
