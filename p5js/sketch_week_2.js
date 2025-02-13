@@ -4,7 +4,7 @@ let canvas;
 let sampleRate = 44100;
 let frameLength = 2048;
 let zcrIndex = 0; // Start fetching from the first index
-let fftIndex = 0;  // Tracks FFT retrieval index
+let freqIndex = 0;  // Tracks FFT retrieval index
 let particles = []; // Array to store particle objects
 let noiseScale = 0.01; // Scale for Perlin noise
 let maxParticles = 200; // Number of particles
@@ -63,8 +63,8 @@ function draw() {
         // Update particle position
         if (kickMode) {
             // Particles move with stronger vertical motion during kick mode
-            p.x += p.dirX * p.speed * 1.0; // Moderate horizontal movement
-            p.y += p.dirY * p.speed * 2.5; // Stronger vertical movement
+            p.x += p.dirX * p.speed * 1.1; // Moderate horizontal movement
+            p.y += p.dirY * p.speed * 2; // Stronger vertical movement
         }
         else if (shootingStarMode) {
             // Particles move in a line during shooting star mode
@@ -164,7 +164,7 @@ function fetchZCR() {
 }
 
 function fetchFREQ() {
-    fetch(`${SERVER_URL}/get_dom_freq/${fftIndex}`)
+    fetch(`${SERVER_URL}/get_dom_freq/${freqIndex}`)
         .then(response => {
             if (!response.ok) {
                 throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
@@ -181,7 +181,7 @@ function fetchFREQ() {
 
 
                 updateBackground(); // Call function to update the background
-                fftIndex++; // Increment index
+                freqIndex++; // Increment index
             }
             else if (data.error) {
                 console.error(`Error from server: ${data.error}`);

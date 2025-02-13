@@ -35,7 +35,7 @@ def get_zcr(index):
 def get_dom_freq(index):
     dom_freq = feature_extractor.get_dom_freq_at_index(index)
     if dom_freq is not None:
-        dom_freq_values.append({"index": index, "freq": dom_freq})  # Store correct index
+        dom_freq_values.append({"index": index, "freq": dom_freq})
         save_json(dom_freq_values, "dom_freq_values.json")  # Save to file
         return jsonify({"freq": dom_freq, "index": index})
     return jsonify({"error": "Index out of range"}), 404
@@ -55,16 +55,13 @@ def shutdown():
     return jsonify({"message": "Shutting down..."})
 
 
-# Signal handler for graceful shutdown
 def handle_exit(signal, frame):
-    """
-    Handle Ctrl+C or SIGTERM signals to cleanly stop the application.
-    """
-    print("Signal received, shutting down gracefully...")
-    feature_extractor.stop_event.set()  # Signal threads to stop
-    audio_thread.join()  # Wait for audio thread to complete
-    feature_extractor.stop_stream()  # Clean up PyAudio resources
-    print("Shutdown complete.")
+    """Handles termination signals for graceful shutdown."""
+    log_message("Signal received, shutting down gracefully...")
+    feature_extractor.stop_event.set()
+    audio_thread.join()  # Ensure audio thread exits cleanly
+    feature_extractor.stop_stream()
+    log_message("Shutdown complete.")
     exit(0)
 
 
@@ -85,5 +82,5 @@ if __name__ == "__main__":
     try:
         app.run(host="127.0.0.1", port=5050)
     except Exception as e:
-        print(f"Error occurred: {e}")
+        log_message(f"Error occurred: {e}")
         handle_exit(None, None)
