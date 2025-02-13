@@ -3,7 +3,7 @@ import numpy as np
 import pyaudio
 import time
 import threading
-
+import queue
 
 class RealTimeFileFeatureExtractor:
     """
@@ -16,8 +16,9 @@ class RealTimeFileFeatureExtractor:
         self.block_size = block_size
         self.scale = scale
         self.zcr_values = []
-        self.spectral_cent = []
+        self.dom_freq_values = []
         self.stop_event = threading.Event()  # Event to signal thread termination
+        self.frame_queue = queue.Queue()  # Queue for frames to be processed
 
         # Load the audio file
         self.audio, _ = librosa.load(filename, sr=sr, mono=True)
@@ -35,6 +36,9 @@ class RealTimeFileFeatureExtractor:
             stream_callback=self.audio_callback
         )
         self.audio_index = 0
+        # Start the background thread for feature extraction
+        self.processing_thread = threading.Thread(target=self.process_features, daemon=True)
+        self.processing_thread.start()
 
     def audio_callback(self, in_data, frame_count, time_info, status):
         """
@@ -51,18 +55,47 @@ class RealTimeFileFeatureExtractor:
 
         frame = self.audio[start:end]
         self.audio_index = end
-
-        # Compute ZCR for the current frame
-        zcr = librosa.feature.zero_crossing_rate(frame, frame_length=len(frame), hop_length=len(frame)).mean()
-        self.zcr_values.append(zcr)
-
-        spectral_centroid = librosa.feature.spectral_centroid(y=frame, n_fft=2048, sr=self.sr,
-                                                              hop_length=len(frame)).mean()
-        self.spectral_cent.append(spectral_centroid)
+        # Send the frame to the processing queue
+        self.frame_queue.put(frame)
 
         return frame.astype(np.float32).tobytes(), pyaudio.paContinue
 
-    def get_features_at_index(self, index):
+    def process_features(self):
+        """
+        Background thread function to compute features asynchronously.
+        """
+        while not self.stop_event.is_set():
+            try:
+                frame = self.frame_queue.get(timeout=1)  # Get a frame from the queue
+
+                # Compute ZCR
+                zcr = librosa.feature.zero_crossing_rate(frame, frame_length=len(frame), hop_length=len(frame)).mean()
+                self.zcr_values.append(zcr)
+
+                # Compute STFT
+                stft_values = librosa.stft(frame, n_fft=2048, hop_length=len(frame), win_length=2048, window='hann')
+                magnitude_spectrum = np.abs(stft_values).mean(axis=1)
+
+                # Find the dominant frequency
+                frequencies = librosa.fft_frequencies(sr=self.sr, n_fft=2048)  # Get frequency bin labels
+                dominant_index = np.argmax(magnitude_spectrum)  # Find the peak frequency index
+                dominant_frequency = frequencies[dominant_index]  # Get corresponding frequency value
+
+                # Store the dominant pitch instead of full FFT spectrum
+                self.dom_freq_values.append(dominant_frequency)
+
+            except queue.Empty:
+                continue  # If the queue is empty, keep looping
+
+    def get_dom_freq_at_index(self, index):
+        """
+        Returns the Dominant Frequency value at a specific index.
+        """
+        if 0 <= index < len(self.dom_freq_values):
+            return self.dom_freq_values[index]
+        return None
+
+    def get_zcr_at_index(self, index):
         """
         Returns the ZCR value at a specific index.
         """

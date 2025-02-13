@@ -1,20 +1,20 @@
 import threading
 import json
+import signal
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from lib.MIRRealTimeFeatureExtractor import RealTimeFileFeatureExtractor
-import signal
-import logging
-logging.getLogger('werkzeug').setLevel(logging.ERROR)  # Suppress logs
-
-zcr_values = []
+from lib.utils.debug_utils import save_json, log_message
 
 # Flask app
 app = Flask(__name__)
 CORS(app)
 
-feature_extractor = RealTimeFileFeatureExtractor("test_track.wav")
+feature_extractor = RealTimeFileFeatureExtractor("test_track_0.wav")
 
+# Data Storage
+zcr_values = []
+dom_freq_values = []
 
 # Start the audio stream in a separate thread
 def start_audio_stream():
@@ -23,18 +23,23 @@ def start_audio_stream():
 
 @app.route("/get_zcr/<int:index>", methods=["GET"])
 def get_zcr(index):
-    zcr = feature_extractor.get_features_at_index(index)
+    zcr = feature_extractor.get_zcr_at_index(index)
     if zcr is not None:
-        zcr_values.append({"index": index, "zcr": zcr})  # Append ZCR value
-        # Save all ZCR values to JSON immediately
-        with open("zcr_values.json", "w") as json_file:
-            json.dump(zcr_values, json_file)
-            print(f"Saved ZCR at index {index} to zcr_values.json")
-
-        print(f"ZCR at index {index}: {zcr}")  # Print the ZCR value live
+        zcr_values.append({"index": index, "zcr": zcr})
+        save_json(zcr_values, "zcr_values.json")  # Save to file
         return jsonify({"zcr": zcr})
-    else:
-        return jsonify({"error": "Index out of range"}), 404
+    return jsonify({"error": "Index out of range"}), 404
+
+
+@app.route("/get_dom_freq/<int:index>", methods=["GET"])
+def get_dom_freq(index):
+    dom_freq = feature_extractor.get_dom_freq_at_index(index)
+    if dom_freq is not None:
+        dom_freq_values.append({"index": index, "freq": dom_freq})  # Store correct index
+        save_json(dom_freq_values, "dom_freq_values.json")  # Save to file
+        return jsonify({"freq": dom_freq, "index": index})
+    return jsonify({"error": "Index out of range"}), 404
+
 
 
 @app.route("/shutdown", methods=["POST"])
@@ -68,9 +73,9 @@ signal.signal(signal.SIGINT, handle_exit)
 signal.signal(signal.SIGTERM, handle_exit)
 
 if __name__ == "__main__":
-    # Initialize an empty JSON file to overwrite old data
-    with open("zcr_values.json", "w") as json_file:
-        json.dump([], json_file)  # Start with an empty JSON list
+    # Initialize JSON files to overwrite old data
+    save_json([], "zcr_values.json")
+    save_json([], "dom_freq_values.json")
 
     # Start audio stream in a background thread
     audio_thread = threading.Thread(target=start_audio_stream, daemon=True)
