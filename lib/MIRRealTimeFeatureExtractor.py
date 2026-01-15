@@ -16,6 +16,7 @@ class RealTimeFileFeatureExtractor:
         self.block_size = block_size
         self.scale = scale
         self.zcr_values = []
+        self.rms_values = []
         self.dom_freq_values = []
         self.stop_event = threading.Event()  # Event to signal thread termination
         self.frame_queue = queue.Queue()  # Queue for frames to be processed
@@ -71,6 +72,9 @@ class RealTimeFileFeatureExtractor:
                 # Compute ZCR
                 zcr = librosa.feature.zero_crossing_rate(frame, frame_length=len(frame), hop_length=len(frame)).mean()
                 self.zcr_values.append(zcr)
+
+                rms = librosa.feature.rms(y=frame, frame_length=len(frame), hop_length=len(frame)).mean()
+                self.rms_values.append(rms)
 
                 # Compute STFT
                 stft_values = librosa.stft(frame, n_fft=2048, hop_length=len(frame), win_length=2048, window='hann')
